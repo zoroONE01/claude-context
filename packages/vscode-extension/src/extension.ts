@@ -27,7 +27,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Initialize providers and commands
     searchCommand = new SearchCommand(codeContext);
-    indexCommand = new IndexCommand(codeContext);
+    indexCommand = new IndexCommand(codeContext, configManager);
     syncCommand = new SyncCommand(codeContext);
     semanticSearchProvider = new SemanticSearchViewProvider(context.extensionUri, searchCommand, indexCommand, syncCommand, configManager);
 
@@ -45,7 +45,8 @@ export async function activate(context: vscode.ExtensionContext) {
             if (event.affectsConfiguration('semanticCodeSearch.embeddingProvider') ||
                 event.affectsConfiguration('semanticCodeSearch.milvus') ||
                 event.affectsConfiguration('semanticCodeSearch.splitter') ||
-                event.affectsConfiguration('semanticCodeSearch.autoSync')) {
+                event.affectsConfiguration('semanticCodeSearch.autoSync') ||
+                event.affectsConfiguration('semanticCodeSearch.indexing')) {
                 console.log('Context configuration changed, reloading...');
                 reloadContextConfiguration();
             }
@@ -60,7 +61,8 @@ export async function activate(context: vscode.ExtensionContext) {
         }),
         vscode.commands.registerCommand('semanticCodeSearch.indexCodebase', () => indexCommand.execute()),
         vscode.commands.registerCommand('semanticCodeSearch.clearIndex', () => indexCommand.clearIndex()),
-        vscode.commands.registerCommand('semanticCodeSearch.reloadConfiguration', () => reloadContextConfiguration())
+        vscode.commands.registerCommand('semanticCodeSearch.reloadConfiguration', () => reloadContextConfiguration()),
+        vscode.commands.registerCommand('semanticCodeSearch.importConfig', () => importConfig())
     ];
 
     context.subscriptions.push(...disposables);
@@ -227,7 +229,7 @@ function reloadContextConfiguration() {
 
         // Update command instances with new context
         searchCommand.updateContext(codeContext);
-        indexCommand.updateContext(codeContext);
+        indexCommand = new IndexCommand(codeContext, configManager);
         syncCommand.updateContext(codeContext);
 
         // Restart auto-sync if it was enabled
@@ -239,6 +241,80 @@ function reloadContextConfiguration() {
         console.error('Failed to reload Context configuration:', error);
         vscode.window.showErrorMessage(`Failed to reload configuration: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+}
+
+async function importConfig(): Promise<void> {
+    const uris = await vscode.window.showOpenDialog({
+        canSelectFiles: true,
+        canSelectFolders: false,
+        canSelectMany: false,
+        filters: { 'JSON Config': ['json'] },
+        openLabel: 'Import Config',
+    });
+
+    if (!uris || uris.length === 0) return;
+
+    const bytes = await vscode.workspace.fs.readFile(uris[0]);
+    const text = Buffer.from(bytes).toString('utf8');
+
+    let parsed: any;
+    try {
+        parsed = JSON.parse(text);
+    } catch {
+        vscode.window.showErrorMessage('Import failed: file is not valid JSON.');
+        return;
+    }
+
+    if (parsed.version !== '1') {
+        const proceed = await vscode.window.showWarningMessage(
+            `Config version "${parsed.version}" is unrecognised. Import anyway?`,
+            'Yes', 'Cancel'
+        );
+        if (proceed !== 'Yes') return;
+    }
+
+    // Apply embedding provider (no secrets)
+    if (parsed.embeddingProvider?.provider) {
+        const wc = vscode.workspace.getConfiguration('semanticCodeSearch');
+        await wc.update('embeddingProvider.provider', parsed.embeddingProvider.provider, vscode.ConfigurationTarget.Global);
+        if (parsed.embeddingProvider.model) {
+            await wc.update('embeddingProvider.model', parsed.embeddingProvider.model, vscode.ConfigurationTarget.Global);
+        }
+        if (parsed.embeddingProvider.baseURL) {
+            await wc.update('embeddingProvider.baseURL', parsed.embeddingProvider.baseURL, vscode.ConfigurationTarget.Global);
+        }
+        if (parsed.embeddingProvider.host) {
+            await wc.update('embeddingProvider.host', parsed.embeddingProvider.host, vscode.ConfigurationTarget.Global);
+        }
+    }
+
+    // Apply Milvus address (no token)
+    if (parsed.milvus?.address) {
+        await configManager.saveMilvusConfig({ address: parsed.milvus.address });
+    }
+
+    // Apply splitter
+    if (parsed.splitter) {
+        const { SplitterType } = await import('@zilliz/claude-context-core');
+        await configManager.saveSplitterConfig({
+            type: (parsed.splitter.type as any) ?? SplitterType.LANGCHAIN,
+            chunkSize: parsed.splitter.chunkSize ?? 1000,
+            chunkOverlap: parsed.splitter.chunkOverlap ?? 200,
+        });
+    }
+
+    // Apply indexing config
+    if (parsed.indexing) {
+        await configManager.saveIndexingConfig(
+            parsed.indexing.customExtensions ?? [],
+            parsed.indexing.customIgnorePatterns ?? []
+        );
+    }
+
+    vscode.window.showInformationMessage(
+        'Config imported successfully. Please enter your API key and Milvus token in Settings.'
+    );
+    reloadContextConfiguration();
 }
 
 export function deactivate() {

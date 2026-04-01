@@ -120,6 +120,44 @@
                 <div class="button-group">
                     <button type="submit" id="saveBtn" class="primary-btn" disabled>Save Configuration</button>
                 </div>
+
+                <div class="form-separator"></div>
+
+                <h3>Indexing Settings</h3>
+
+                <div class="form-group">
+                    <label for="customExtensions">Custom File Extensions</label>
+                    <input type="text" id="customExtensions"
+                        placeholder="e.g. .vue,.svelte,.mdx (comma-separated, dot required)" />
+                    <small style="color: var(--vscode-descriptionForeground); font-size: 11px;">
+                        Extra extensions to index beyond core defaults. Each must start with a dot.
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label for="customIgnorePatterns">Custom Ignore Patterns</label>
+                    <textarea id="customIgnorePatterns" rows="3"
+                        placeholder="e.g. **/*.test.ts&#10;**/fixtures/**&#10;(one pattern per line)"
+                        style="width: 100%; resize: vertical; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); padding: 6px; border-radius: 3px; font-family: inherit; font-size: 12px;"></textarea>
+                    <small style="color: var(--vscode-descriptionForeground); font-size: 11px;">
+                        Additional glob patterns to exclude. Merged with built-in defaults.
+                    </small>
+                </div>
+
+                <div class="form-separator"></div>
+
+                <h3>Portable Config</h3>
+
+                <div class="form-group">
+                    <button type="button" id="exportConfigBtn" class="secondary-btn">
+                        Export Config (no secrets)
+                    </button>
+                    <small
+                        style="color: var(--vscode-descriptionForeground); font-size: 11px; display: block; margin-top: 4px;">
+                        Saves all settings except API keys to <code>claude-context.config.json</code>.
+                        Importable by antigravity and other tools.
+                    </small>
+                </div>
             </form>
 
             <div id="status" class="status-message" style="display: none;"></div>

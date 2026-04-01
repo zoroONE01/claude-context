@@ -1,12 +1,15 @@
 import * as vscode from 'vscode';
 import { Context } from '@zilliz/claude-context-core';
 import * as path from 'path';
+import { ConfigManager } from '../config/configManager';
 
 export class IndexCommand {
     private context: Context;
+    private configManager: ConfigManager;
 
-    constructor(context: Context) {
+    constructor(context: Context, configManager: ConfigManager) {
         this.context = context;
+        this.configManager = configManager;
     }
 
     /**
@@ -75,7 +78,23 @@ export class IndexCommand {
                 // Initialize file synchronizer
                 progress.report({ increment: 0, message: 'Initializing file synchronizer...' });
                 const { FileSynchronizer } = await import("@zilliz/claude-context-core");
-                const synchronizer = new FileSynchronizer(selectedFolder.uri.fsPath, this.context.getIgnorePatterns() || []);
+
+                // Merge default patterns with user-configured custom ignore patterns
+                const defaultIgnorePatterns = this.context.getIgnorePatterns() || [];
+                const customIgnorePatterns = this.configManager.getCustomIgnorePatterns();
+                const mergedIgnorePatterns = [...new Set([...defaultIgnorePatterns, ...customIgnorePatterns])];
+
+                const synchronizer = new FileSynchronizer(selectedFolder.uri.fsPath, mergedIgnorePatterns);
+
+                // Log active custom config for debugging
+                const customExtensions = this.configManager.getCustomExtensions();
+                if (customExtensions.length > 0) {
+                    console.log(`[INDEX] Custom extensions enabled: ${customExtensions.join(', ')}`);
+                    console.log('[INDEX] Note: custom extensions expand indexing beyond core defaults.');
+                }
+                if (customIgnorePatterns.length > 0) {
+                    console.log(`[INDEX] Custom ignore patterns active: ${customIgnorePatterns.join(', ')}`);
+                }
                 await synchronizer.initialize();
                 // Store synchronizer in the context's internal map using the collection name from context
                 await this.context.getPreparedCollection(selectedFolder.uri.fsPath);

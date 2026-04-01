@@ -45,6 +45,11 @@
                 "command": "semanticCodeSearch.clearIndex",
                 "title": "Clear Index",
                 "category": "Semantic Code Search"
+            },
+            {
+                "command": "semanticCodeSearch.importConfig",
+                "title": "Import Config from File",
+                "category": "Semantic Code Search"
             }
         ],
         "menus": {
@@ -157,6 +162,23 @@
                     "minimum": 0,
                     "maximum": 1000,
                     "description": "Number of overlapping characters between consecutive chunks"
+                },
+                "semanticCodeSearch.indexing.customExtensions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "pattern": "^\\.[a-zA-Z0-9]+$"
+                    },
+                    "default": [],
+                    "description": "Extra file extensions to include in indexing, e.g. [\".vue\", \".svelte\", \".mdx\"]. Each value must start with a dot."
+                },
+                "semanticCodeSearch.indexing.customIgnorePatterns": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "default": [],
+                    "description": "Additional glob patterns to exclude from indexing, e.g. [\"**/*.test.ts\", \"**/fixtures/**\"]. Merged with default ignore patterns."
                 }
             }
         }
@@ -170,6 +192,7 @@
         "clean": "rimraf dist",
         "lint": "eslint src",
         "lint:fix": "eslint src --fix",
+        "test": "jest",
         "typecheck": "tsc --noEmit",
         "package": "vsce package --no-dependencies",
         "release": "vsce publish --no-dependencies"
@@ -179,6 +202,7 @@
         "web-tree-sitter": "^0.25.6"
     },
     "devDependencies": {
+        "@types/jest": "^30.0.0",
         "@types/node": "20.x",
         "@types/vscode": "^1.74.0",
         "@typescript-eslint/eslint-plugin": "^8.31.1",
@@ -186,7 +210,9 @@
         "@vscode/vsce": "^3.4.0",
         "copy-webpack-plugin": "^12.0.2",
         "eslint": "^9.25.1",
+        "jest": "^30.0.1",
         "source-map-loader": "^5.0.0",
+        "ts-jest": "^29.4.0",
         "ts-loader": "^9.5.2",
         "typescript": "^5.8.3",
         "webpack": "^5.99.9",

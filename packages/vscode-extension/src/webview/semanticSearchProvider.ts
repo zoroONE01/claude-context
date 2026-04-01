@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as os from 'os';
 import { WebviewHelper } from './webviewHelper';
 import { SearchCommand } from '../commands/searchCommand';
 import { IndexCommand } from '../commands/indexCommand';
@@ -73,6 +74,39 @@ export class SemanticSearchViewProvider implements vscode.WebviewViewProvider {
                     case 'testEmbedding':
                         await this.testEmbedding(message.config, webviewView.webview);
                         return;
+
+                    case 'exportConfig': {
+                        try {
+                            const jsonString = this.configManager.exportConfig();
+
+                            // Better default path construction
+                            const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ??
+                                os.homedir();
+                            const defaultUri = vscode.Uri.file(
+                                path.join(workspacePath, 'claude-context.config.json')
+                            );
+
+                            const saveUri = await vscode.window.showSaveDialog({
+                                defaultUri,
+                                filters: { 'JSON Config': ['json'] },
+                                saveLabel: 'Export Config',
+                            });
+
+                            if (saveUri) {
+                                await vscode.workspace.fs.writeFile(
+                                    saveUri,
+                                    Buffer.from(jsonString, 'utf8')
+                                );
+                                vscode.window.showInformationMessage(
+                                    `Config exported to ${saveUri.fsPath}. Note: API keys were not included.`
+                                );
+                            }
+                        } catch (error) {
+                            const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+                            vscode.window.showErrorMessage(`Export failed: ${errorMsg}`);
+                        }
+                        return;
+                    }
 
                     case 'search':
                         try {
@@ -228,13 +262,18 @@ export class SemanticSearchViewProvider implements vscode.WebviewViewProvider {
         const milvusConfig = this.configManager.getMilvusConfig();
         const splitterConfig = this.configManager.getSplitterConfig();
         const supportedProviders = ConfigManager.getSupportedProviders();
+        const indexingConfig = {
+            customExtensions: this.configManager.getCustomExtensions(),
+            customIgnorePatterns: this.configManager.getCustomIgnorePatterns(),
+        };
 
         webview.postMessage({
             command: 'configData',
             config: config,
             milvusConfig: milvusConfig,
             splitterConfig: splitterConfig,
-            supportedProviders: supportedProviders
+            supportedProviders: supportedProviders,
+            indexingConfig: indexingConfig,
         });
     }
 
@@ -255,6 +294,14 @@ export class SemanticSearchViewProvider implements vscode.WebviewViewProvider {
             // Save splitter config
             if (configData.splitterConfig) {
                 await this.configManager.saveSplitterConfig(configData.splitterConfig);
+            }
+
+            // Save indexing config (custom extensions + ignore patterns)
+            if (configData.indexingConfig) {
+                await this.configManager.saveIndexingConfig(
+                    configData.indexingConfig.customExtensions ?? [],
+                    configData.indexingConfig.customIgnorePatterns ?? []
+                );
             }
 
             // Add a small delay to ensure configuration is fully saved

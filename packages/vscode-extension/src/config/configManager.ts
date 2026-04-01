@@ -380,4 +380,107 @@ export class ConfigManager {
         await workspaceConfig.update('splitter.chunkSize', splitterConfig.chunkSize || 1000, vscode.ConfigurationTarget.Global);
         await workspaceConfig.update('splitter.chunkOverlap', splitterConfig.chunkOverlap || 200, vscode.ConfigurationTarget.Global);
     }
+
+    /**
+     * Get custom file extensions for indexing
+     */
+    getCustomExtensions(): string[] {
+        const config = vscode.workspace.getConfiguration(ConfigManager.CONFIG_KEY);
+        return config.get<string[]>('indexing.customExtensions', []);
+    }
+
+    /**
+     * Get custom ignore patterns for indexing
+     */
+    getCustomIgnorePatterns(): string[] {
+        const config = vscode.workspace.getConfiguration(ConfigManager.CONFIG_KEY);
+        return config.get<string[]>('indexing.customIgnorePatterns', []);
+    }
+
+    /**
+     * Save indexing configuration (custom extensions and ignore patterns)
+     */
+    async saveIndexingConfig(customExtensions: string[], customIgnorePatterns: string[]): Promise<void> {
+        const workspaceConfig = vscode.workspace.getConfiguration(ConfigManager.CONFIG_KEY);
+
+        await workspaceConfig.update('indexing.customExtensions', customExtensions, vscode.ConfigurationTarget.Global);
+        await workspaceConfig.update('indexing.customIgnorePatterns', customIgnorePatterns, vscode.ConfigurationTarget.Global);
+    }
+
+    /**
+     * Export all non-secret settings to portable JSON format
+     * Explicitly excludes API keys and tokens
+     */
+    exportConfig(): string {
+        const config = vscode.workspace.getConfiguration(ConfigManager.CONFIG_KEY);
+
+        const exportObj: any = {
+            version: '1',
+            embeddingProvider: {},
+            milvus: {},
+            splitter: {},
+            indexing: {}
+        };
+
+        // Embedding provider fields (excluding apiKey)
+        const provider = config.get<string>('embeddingProvider.provider');
+        if (provider !== undefined) {
+            exportObj.embeddingProvider.provider = provider;
+        }
+
+        const model = config.get<string>('embeddingProvider.model');
+        if (model !== undefined) {
+            exportObj.embeddingProvider.model = model;
+        }
+
+        const baseURL = config.get<string>('embeddingProvider.baseURL');
+        if (baseURL !== undefined) {
+            exportObj.embeddingProvider.baseURL = baseURL;
+        }
+
+        const host = config.get<string>('embeddingProvider.host');
+        if (host !== undefined) {
+            exportObj.embeddingProvider.host = host;
+        }
+
+        const keepAlive = config.get<string>('embeddingProvider.keepAlive');
+        if (keepAlive !== undefined) {
+            exportObj.embeddingProvider.keepAlive = keepAlive;
+        }
+
+        // Milvus configuration (excluding token)
+        const address = config.get<string>('milvus.address');
+        if (address !== undefined) {
+            exportObj.milvus.address = address;
+        }
+
+        // Splitter configuration
+        const splitterType = config.get<string>('splitter.type');
+        if (splitterType !== undefined) {
+            exportObj.splitter.type = splitterType;
+        }
+
+        const chunkSize = config.get<number>('splitter.chunkSize');
+        if (chunkSize !== undefined) {
+            exportObj.splitter.chunkSize = chunkSize;
+        }
+
+        const chunkOverlap = config.get<number>('splitter.chunkOverlap');
+        if (chunkOverlap !== undefined) {
+            exportObj.splitter.chunkOverlap = chunkOverlap;
+        }
+
+        // Indexing configuration
+        const customExtensions = config.get<string[]>('indexing.customExtensions');
+        if (customExtensions !== undefined) {
+            exportObj.indexing.customExtensions = customExtensions;
+        }
+
+        const customIgnorePatterns = config.get<string[]>('indexing.customIgnorePatterns');
+        if (customIgnorePatterns !== undefined) {
+            exportObj.indexing.customIgnorePatterns = customIgnorePatterns;
+        }
+
+        return JSON.stringify(exportObj, null, 2);
+    }
 }

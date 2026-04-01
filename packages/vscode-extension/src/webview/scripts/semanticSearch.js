@@ -48,6 +48,11 @@ class SemanticSearchController {
         this.statusDiv = document.getElementById('status');
         this.configForm = document.getElementById('configForm');
 
+        // Indexing Settings elements
+        this.customExtensionsInput = document.getElementById('customExtensions');
+        this.customIgnorePatternsInput = document.getElementById('customIgnorePatterns');
+        this.exportConfigBtn = document.getElementById('exportConfigBtn');
+
         // Current config state
         this.currentConfig = null;
         this.supportedProviders = {};
@@ -78,6 +83,12 @@ class SemanticSearchController {
         this.milvusTokenInput.addEventListener('input', () => this.validateForm());
         this.testBtn.addEventListener('click', () => this.handleTestConnection());
         this.configForm.addEventListener('submit', (e) => this.handleFormSubmit(e));
+
+        if (this.exportConfigBtn) {
+            this.exportConfigBtn.addEventListener('click', () => {
+                this.vscode.postMessage({ command: 'exportConfig' });
+            });
+        }
 
         // Handle messages from extension
         window.addEventListener('message', (event) => this.handleMessage(event));
@@ -267,7 +278,13 @@ class SemanticSearchController {
                 break;
 
             case 'configData':
-                this.loadConfig(message.config, message.supportedProviders, message.milvusConfig, message.splitterConfig);
+                this.loadConfig(
+                    message.config,
+                    message.supportedProviders,
+                    message.milvusConfig,
+                    message.splitterConfig,
+                    message.indexingConfig
+                );
                 break;
 
             case 'saveResult':
@@ -661,6 +678,30 @@ class SemanticSearchController {
 
         if (!this.validateCurrentForm()) return;
 
+        // Parse custom extensions (comma-separated, filter empties, ensure dot prefix)
+        const rawExtensions = (this.customExtensionsInput?.value || '')
+            .split(',')
+            .map(e => e.trim())
+            .filter(e => e.length > 0);
+
+        // Validate: each must start with a dot
+        const invalidExts = rawExtensions.filter(e => !e.startsWith('.'));
+        if (invalidExts.length > 0) {
+            this.showStatus(`Invalid extensions (must start with .): ${invalidExts.join(', ')}`, 'error');
+            return;
+        }
+
+        // Parse custom ignore patterns (one per line)
+        const rawPatterns = (this.customIgnorePatternsInput?.value || '')
+            .split('\n')
+            .map(p => p.trim())
+            .filter(p => p.length > 0);
+
+        const indexingConfig = {
+            customExtensions: rawExtensions,
+            customIgnorePatterns: rawPatterns,
+        };
+
         const config = this.getCurrentFormConfig();
         this.showStatus('Saving configuration...', 'info');
         this.saveBtn.disabled = true;
@@ -668,7 +709,10 @@ class SemanticSearchController {
 
         this.vscode.postMessage({
             command: 'saveConfig',
-            config: config
+            config: {
+                ...config,
+                indexingConfig: indexingConfig,
+            }
         });
     }
 
@@ -758,7 +802,7 @@ class SemanticSearchController {
         }
     }
 
-    loadConfig(config, providers, milvusConfig, splitterConfig) {
+    loadConfig(config, providers, milvusConfig, splitterConfig, indexingConfig) {
         this.currentConfig = config;
 
         // Only update providers if we actually received them from backend
@@ -799,6 +843,16 @@ class SemanticSearchController {
             this.splitterTypeSelect.value = 'langchain';
             this.chunkSizeInput.value = 1000;
             this.chunkOverlapInput.value = 200;
+        }
+
+        // Load indexing settings
+        if (indexingConfig) {
+            if (this.customExtensionsInput) {
+                this.customExtensionsInput.value = (indexingConfig.customExtensions || []).join(',');
+            }
+            if (this.customIgnorePatternsInput) {
+                this.customIgnorePatternsInput.value = (indexingConfig.customIgnorePatterns || []).join('\n');
+            }
         }
 
         this.validateForm();
